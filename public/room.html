@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sala · Familia deCali</title>
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body class="room-body">
+  <div class="app-room">
+    <aside class="sidebar">
+      <div class="sidebar-head">
+        <span style="font-size:24px">🏠</span>
+        <div>
+          <div style="font-weight:700">Familia deCali</div>
+          <div class="room-code" id="roomCode">------</div>
+        </div>
+      </div>
+      <div class="section-label">Mesa — <span id="memberCount">0</span>/12</div>
+      <ul class="member-list" id="memberList"></ul>
+      <div style="padding:8px;border-top:1px solid var(--border)">
+        <div class="section-label">Volumes</div>
+        <div id="volumeList"></div>
+      </div>
+    </aside>
+    <main class="main">
+      <div class="topbar">
+        <div style="font-weight:600">Mesa · Espaço = falar (PTT)</div>
+        <div style="display:flex;gap:6px;align-items:center">
+          <select id="quality" style="width:auto;padding:6px;font-size:0.8rem">
+            <option value="economy">Tela: econômica</option>
+            <option value="balanced" selected>Tela: equilibrada</option>
+            <option value="high">Tela: alta</option>
+          </select>
+          <button class="btn-icon" id="btnCopy">📋</button>
+          <button class="btn-icon" id="btnLeave">🚪</button>
+        </div>
+      </div>
+      <div class="screen-grid hidden" id="screenGrid"></div>
+      <div class="table-area" id="tableArea">
+        <div class="table-center">Familia<br>deCali</div>
+      </div>
+      <div class="controls">
+        <button class="ctrl-btn" id="btnMute"><span>🎤</span><span class="ctrl-label">Mute</span></button>
+        <button class="ctrl-btn" id="btnDeafen"><span>🎧</span><span class="ctrl-label">Surdo</span></button>
+        <button class="ctrl-btn" id="btnPTT"><span>🎙️</span><span class="ctrl-label">PTT</span></button>
+        <button class="ctrl-btn" id="btnScreen"><span>🖥️</span><span class="ctrl-label">Tela</span></button>
+        <button class="ctrl-btn" id="btnLeave2"><span>🚪</span><span class="ctrl-label">Sair</span></button>
+      </div>
+    </main>
+    <aside class="chat-panel">
+      <div class="chat-head">Chat da sala</div>
+      <div class="chat-messages" id="chatMessages"></div>
+      <form class="chat-form" id="chatForm">
+        <input type="text" id="chatInput" placeholder="Mensagem..." maxlength="500" />
+        <button type="submit">➤</button>
+      </form>
+    </aside>
+  </div>
+  <div id="audioContainer" style="display:none"></div>
+  <div class="ptt-hint" id="pttHint">Falando (Espaço)</div>
+  <div id="ctx" class="ctx-menu hidden"></div>
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/js/auth.js"></script>
+  <script src="/js/common.js"></script>
+  <script src="/js/room.js"></script>
+</body>
+</html>

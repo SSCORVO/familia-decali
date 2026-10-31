@@ -1,0 +1,16 @@
+{
+  "name": "familia-decali",
+  "version": "3.0.0",
+  "description": "Familia deCali - Fases 1-5",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "express": "^4.21.0",
+    "socket.io": "^4.7.5",
+    "uuid": "^10.0.0"
+  }
+}

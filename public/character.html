@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Personagem · Familia deCali</title>
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <nav class="nav-side">
+      <div class="nav-brand">🏠 Familia deCali</div>
+      <a class="nav-link" href="/home.html">Início</a>
+      <a class="nav-link active" href="/character.html">Personagem</a>
+      <a class="nav-link" href="/account.html">Minha conta</a>
+      <div class="nav-footer">
+        <div id="navName">—</div>
+        <div class="role-badge" id="navRole">—</div>
+        <button class="btn btn-ghost btn-sm" style="margin-top:10px;width:100%" onclick="logout()">Sair</button>
+      </div>
+    </nav>
+    <main class="content">
+      <h1>Seu personagem</h1>
+      <p class="lead">Aparência na mesa da sala.</p>
+      <div class="card" style="max-width:400px">
+        <div class="char-preview" id="preview"></div>
+        <div class="form-group"><label>Pele</label><div class="color-row" id="skins"></div></div>
+        <div class="form-group"><label>Cabelo</label><div class="color-row" id="hairs"></div></div>
+        <div class="form-group"><label>Roupa</label><div class="color-row" id="clothes"></div></div>
+        <div class="form-group">
+          <label>Acessório</label>
+          <select id="accessory">
+            <option value="none">Nenhum</option>
+            <option value="hat">Chapéu</option>
+            <option value="glasses">Óculos</option>
+            <option value="headphones">Fone</option>
+            <option value="crown">Coroa</option>
+          </select>
+        </div>
+        <button class="btn btn-ghost" onclick="randomize()">Aparência aleatória</button>
+        <button class="btn btn-accent" onclick="save()">Salvar</button>
+        <p id="msg" class="muted" style="margin-top:8px"></p>
+      </div>
+    </main>
+  </div>
+  <script src="/js/auth.js"></script>
+  <script>
+    const SKINS = ['#f5d0c5','#e0ac69','#c68642','#8d5524','#5c3317'];
+    const HAIRS = ['#1a1a1a','#4a3728','#c4a35a','#e8e8e8','#c0392b','#2c3e50'];
+    const CLOTHES = ['#5865f2','#23a559','#e74c3c','#f39c12','#9b59b6','#1abc9c','#34495e'];
+    let ch = { skin: SKINS[0], hair: HAIRS[0], clothes: CLOTHES[0], accessory: 'none' };
+
+    const ACC_ICON = { none: '', hat: '🎩', glasses: '👓', headphones: '🎧', crown: '👑' };
+
+    (async () => {
+      const user = await requireAuth();
+      if (!user) return;
+      document.getElementById('navName').textContent = user.displayName;
+      document.getElementById('navRole').textContent = ROLE_LABELS[user.role] || user.role;
+      if (user.character) ch = { ...ch, ...user.character };
+      document.getElementById('accessory').value = ch.accessory || 'none';
+      fillColors('skins', SKINS, 'skin');
+      fillColors('hairs', HAIRS, 'hair');
+      fillColors('clothes', CLOTHES, 'clothes');
+      document.getElementById('accessory').onchange = () => {
+        ch.accessory = document.getElementById('accessory').value;
+        render();
+      };
+      render();
+    })();
+
+    function fillColors(id, list, key) {
+      const row = document.getElementById(id);
+      row.innerHTML = list.map(c =>
+        `<div class="color-dot ${ch[key]===c?'selected':''}" style="background:${c}" onclick="pick('${key}','${c}')"></div>`
+      ).join('');
+    }
+    function pick(key, val) {
+      ch[key] = val;
+      fillColors('skins', SKINS, 'skin');
+      fillColors('hairs', HAIRS, 'hair');
+      fillColors('clothes', CLOTHES, 'clothes');
+      render();
+    }
+    function render() {
+      document.getElementById('preview').innerHTML = `
+        <div class="char-body" style="background:${ch.clothes}">
+          <div class="char-hair" style="background:${ch.hair}"></div>
+          <div class="char-head" style="background:${ch.skin}"></div>
+          <div class="char-acc">${ACC_ICON[ch.accessory]||''}</div>
+        </div>`;
+    }
+    async function randomize() {
+      const res = await fetch('/api/account/character/random', { method: 'POST', headers: authHeaders() });
+      const data = await res.json();
+      if (data.user && data.user.character) {
+        ch = data.user.character;
+        document.getElementById('accessory').value = ch.accessory || 'none';
+        fillColors('skins', SKINS, 'skin');
+        fillColors('hairs', HAIRS, 'hair');
+        fillColors('clothes', CLOTHES, 'clothes');
+        render();
+        setSession(getToken(), data.user);
+        document.getElementById('msg').textContent = 'Aleatório gerado e salvo.';
+      }
+    }
+    async function save() {
+      const res = await fetch('/api/account/character', {
+        method: 'POST', headers: authHeaders(), body: JSON.stringify(ch)
+      });
+      const data = await res.json();
+      if (!res.ok) return document.getElementById('msg').textContent = data.error;
+      setSession(getToken(), data.user);
+      document.getElementById('msg').textContent = 'Personagem salvo!';
+    }
+  </script>
+</body>
+</html>

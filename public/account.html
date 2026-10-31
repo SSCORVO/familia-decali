@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Minha conta · Familia deCali</title>
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <nav class="nav-side">
+      <div class="nav-brand">🏠 Familia deCali</div>
+      <a class="nav-link" href="/home.html">Início</a>
+      <a class="nav-link active" href="/account.html">Minha conta</a>
+      <a class="nav-link" href="/invites.html" id="navInvites" style="display:none">Convites</a>
+      <div class="nav-footer">
+        <div id="navName">—</div>
+        <div class="role-badge" id="navRole">—</div>
+        <button class="btn btn-ghost btn-sm" style="margin-top:10px;width:100%" onclick="logout()">Sair</button>
+      </div>
+    </nav>
+    <main class="content">
+      <h1>Minha conta</h1>
+      <p class="lead">Altere nome de exibição ou senha. Trocar a senha encerra outras sessões.</p>
+
+      <div class="card" style="margin-bottom:16px">
+        <h2>Perfil</h2>
+        <div class="form-group">
+          <label>Usuário (login)</label>
+          <input type="text" id="username" disabled />
+        </div>
+        <div class="form-group">
+          <label>Nome de exibição</label>
+          <input type="text" id="displayName" maxlength="32" />
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="saveProfile()">Salvar nome</button>
+        <p id="profileMsg" class="muted" style="margin-top:8px"></p>
+      </div>
+
+      <div class="card">
+        <h2>Alterar senha</h2>
+        <div class="form-group">
+          <label>Senha atual</label>
+          <input type="password" id="curPass" />
+        </div>
+        <div class="form-group">
+          <label>Nova senha</label>
+          <input type="password" id="newPass" />
+        </div>
+        <button class="btn btn-danger btn-sm" onclick="changePass()">Alterar senha</button>
+        <p id="passMsg" class="muted" style="margin-top:8px"></p>
+      </div>
+    </main>
+  </div>
+  <script src="/js/auth.js"></script>
+  <script>
+    (async () => {
+      const user = await requireAuth();
+      if (!user) return;
+      document.getElementById('navName').textContent = user.displayName;
+      document.getElementById('navRole').textContent = ROLE_LABELS[user.role] || user.role;
+      document.getElementById('username').value = user.username;
+      document.getElementById('displayName').value = user.displayName;
+      if (user.role === 'owner' || user.role === 'admin') {
+        document.getElementById('navInvites').style.display = 'block';
+      }
+    })();
+
+    async function saveProfile() {
+      const displayName = document.getElementById('displayName').value.trim();
+      const res = await fetch('/api/account/profile', {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({ displayName })
+      });
+      const data = await res.json();
+      const msg = document.getElementById('profileMsg');
+      if (!res.ok) { msg.textContent = data.error; return; }
+      setSession(getToken(), data.user);
+      msg.textContent = 'Salvo!';
+      document.getElementById('navName').textContent = data.user.displayName;
+    }
+
+    async function changePass() {
+      const currentPassword = document.getElementById('curPass').value;
+      const newPassword = document.getElementById('newPass').value;
+      const res = await fetch('/api/account/password', {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({ currentPassword, newPassword })
+      });
+      const data = await res.json();
+      const msg = document.getElementById('passMsg');
+      if (!res.ok) { msg.textContent = data.error; return; }
+      setSession(data.token, getUser());
+      msg.textContent = data.message || 'Senha alterada.';
+      document.getElementById('curPass').value = '';
+      document.getElementById('newPass').value = '';
+    }
+  </script>
+</body>
+</html>

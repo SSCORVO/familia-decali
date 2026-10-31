@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin · Familia deCali</title>
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <nav class="nav-side">
+      <div class="nav-brand">🏠 Familia deCali</div>
+      <a class="nav-link" href="/home.html">Início</a>
+      <a class="nav-link" href="/invites.html">Convites</a>
+      <a class="nav-link active" href="/admin.html">Admin</a>
+      <div class="nav-footer">
+        <button class="btn btn-ghost btn-sm" style="width:100%" onclick="logout()">Sair</button>
+      </div>
+    </nav>
+    <main class="content">
+      <h1>Administração</h1>
+      <div class="card" style="margin-bottom:16px">
+        <h2>Usuários e cargos</h2>
+        <table class="table" id="usersTable"><thead><tr><th>Nome</th><th>User</th><th>Cargo</th><th>Ações</th></tr></thead><tbody></tbody></table>
+      </div>
+      <div class="card">
+        <h2>Registro de ações</h2>
+        <ul id="auditList" class="muted" style="list-style:none"></ul>
+      </div>
+    </main>
+  </div>
+  <script src="/js/auth.js"></script>
+  <script>
+    (async () => {
+      const user = await requireAuth();
+      if (!user || (user.role !== 'owner' && user.role !== 'admin')) {
+        location.href = '/home.html';
+        return;
+      }
+      loadUsers();
+      loadAudit();
+    })();
+
+    async function loadUsers() {
+      const res = await fetch('/api/users', { headers: authHeaders() });
+      const data = await res.json();
+      const tb = document.querySelector('#usersTable tbody');
+      tb.innerHTML = (data.users || []).map(u => `
+        <tr>
+          <td>${escapeHtml(u.displayName)}</td>
+          <td>${escapeHtml(u.username)}</td>
+          <td>
+            <select onchange="setRole('${u.id}', this.value)" ${u.role==='owner'?'disabled':''}>
+              ${['admin','moderator','member','guest'].map(r =>
+                `<option value="${r}" ${u.role===r?'selected':''}>${ROLE_LABELS[r]}</option>`
+              ).join('')}
+              ${u.role==='owner'?'<option selected>Dono</option>':''}
+            </select>
+          </td>
+          <td>${u.role!=='owner'?`<button class="btn btn-danger btn-sm" onclick="ban('${u.id}')">Bloquear</button>`:''}</td>
+        </tr>
+      `).join('');
+    }
+
+    async function setRole(id, role) {
+      const res = await fetch('/api/users/' + id + '/role', {
+        method: 'POST', headers: authHeaders(), body: JSON.stringify({ role })
+      });
+      const data = await res.json();
+      if (!res.ok) alert(data.error);
+      loadUsers();
+    }
+
+    async function ban(id) {
+      if (!confirm('Bloquear este usuário? Sessões serão invalidadas.')) return;
+      const res = await fetch('/api/users/' + id + '/ban', {
+        method: 'POST', headers: authHeaders(), body: JSON.stringify({ reason: 'ban admin' })
+      });
+      const data = await res.json();
+      if (!res.ok) alert(data.error);
+      loadUsers();
+    }
+
+    async function loadAudit() {
+      const res = await fetch('/api/audit', { headers: authHeaders() });
+      const data = await res.json();
+      document.getElementById('auditList').innerHTML = (data.log || []).map(e =>
+        `<li style="padding:6px 0;border-bottom:1px solid var(--border)">
+          <code>${e.action}</code> · ${new Date(e.at).toLocaleString('pt-BR')}
+          <div style="font-size:0.75rem">${JSON.stringify(e.detail)}</div>
+        </li>`
+      ).join('') || '<li>Vazio</li>';
+    }
+
+    function escapeHtml(s) {
+      return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+  </script>
+</body>
+</html>

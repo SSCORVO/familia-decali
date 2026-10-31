@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#5865f2" />
+  <link rel="manifest" href="/manifest.json" />
+  <title>Início · Familia deCali</title>
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <nav class="nav-side">
+      <div class="nav-brand">🏠 Familia deCali</div>
+      <a class="nav-link active" href="/home.html">Início</a>
+      <a class="nav-link" href="/character.html">Personagem</a>
+      <a class="nav-link" href="/account.html">Minha conta</a>
+      <a class="nav-link" href="/invites.html" id="navInvites" style="display:none">Convites</a>
+      <a class="nav-link" href="/admin.html" id="navAdmin" style="display:none">Admin</a>
+      <div class="nav-footer">
+        <div id="navName">—</div>
+        <div class="role-badge" id="navRole">—</div>
+        <button class="btn btn-ghost btn-sm" style="margin-top:10px;width:100%" onclick="logout()">Sair</button>
+      </div>
+    </nav>
+    <main class="content">
+      <h1>Início</h1>
+      <p class="lead">Salas de voz/tela · Grupos e canais de texto</p>
+
+      <div class="grid-2">
+        <div class="card">
+          <h2>Sala ao vivo (mesa)</h2>
+          <p class="muted">Voz, várias telas, chat e mesa com personagens.</p>
+          <button class="btn btn-accent" onclick="createRoom()">Criar sala</button>
+          <div class="form-group" style="margin-top:12px">
+            <label>Ou entrar com código</label>
+            <input type="text" id="roomCode" maxlength="8" style="text-transform:uppercase" />
+          </div>
+          <button class="btn btn-primary" onclick="joinRoom()">Entrar na sala</button>
+        </div>
+        <div class="card">
+          <h2>Novo grupo</h2>
+          <div class="form-group">
+            <label>Nome</label>
+            <input type="text" id="groupName" maxlength="40" placeholder="Ex: Família" />
+          </div>
+          <div class="form-group">
+            <label>Capacidade (2–12)</label>
+            <input type="number" id="groupCap" min="2" max="12" value="12" />
+          </div>
+          <label style="font-size:0.85rem;display:flex;gap:8px;align-items:center;margin-bottom:10px">
+            <input type="checkbox" id="groupPrivate" /> Privado
+          </label>
+          <button class="btn btn-primary" onclick="createGroup()">Criar grupo</button>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:16px">
+        <h2>Grupos e canais</h2>
+        <div id="groupsList" class="muted">Carregando...</div>
+      </div>
+
+      <div class="card" style="margin-top:16px" id="chatCard" class="hidden">
+        <h2>Canal: <span id="chName">—</span></h2>
+        <div class="chat-messages" id="chMessages" style="min-height:200px;max-height:320px;background:var(--bg-input);border-radius:8px;padding:12px;margin-bottom:8px"></div>
+        <div class="typing-bar" id="typingBar"></div>
+        <form id="chForm" style="display:flex;gap:8px">
+          <input type="text" id="chInput" placeholder="Mensagem... use @nome para mencionar" maxlength="1000" style="flex:1" />
+          <button class="btn btn-primary btn-sm" type="submit">Enviar</button>
+        </form>
+      </div>
+    </main>
+  </div>
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/js/auth.js"></script>
+  <script>
+    let socket, currentChannel = null, user = null;
+    const typingTimers = {};
+
+    (async () => {
+      user = await requireAuth();
+      if (!user) return;
+      document.getElementById('navName').textContent = user.displayName;
+      document.getElementById('navRole').textContent = ROLE_LABELS[user.role] || user.role;
+      if (user.role === 'owner' || user.role === 'admin') {
+        document.getElementById('navInvites').style.display = 'block';
+        document.getElementById('navAdmin').style.display = 'block';
+      }
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/sw.js').catch(() => {});
+      }
+      socket = io({ auth: { token: getToken() } });
+      socket.on('channel-message', onChannelMsg);
+      socket.on('message-deleted', ({ id }) => {
+        const el = document.getElementById('msg-' + id);
+        if (el) el.remove();
+      });
+      socket.on('typing', ({ name, typing: t, userId }) => {
+        if (userId === user.id) return;
+        const bar = document.getElementById('typingBar');
+        if (t) bar.textContent = name + ' está digitando...';
+        else if (bar.textContent.startsWith(name)) bar.textContent = '';
+      });
+      loadGroups();
+    })();
+
+    async function createRoom() {
+      const res = await fetch('/api/rooms/create', { method: 'POST', headers: authHeaders() });
+      const data = await res.json();
+      if (!res.ok) return alert(data.error);
+      location.href = '/room.html?code=' + data.code;
+    }
+    function joinRoom() {
+      const code = document.getElementById('roomCode').value.trim().toUpperCase();
+      if (!code) return alert('Código obrigatório');
+      location.href = '/room.html?code=' + code;
+    }
+
+    async function createGroup() {
+      const res = await fetch('/api/groups', {
+        method: 'POST', headers: authHeaders(),
+        body: JSON.stringify({
+          name: document.getElementById('groupName').value,
+          capacity: document.getElementById('groupCap').value,
+          isPrivate: document.getElementById('groupPrivate').checked
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) return alert(data.error);
+      loadGroups();
+      openChannel(data.channel.id, data.channel.name);
+    }
+
+    async function loadGroups() {
+      const res = await fetch('/api/groups', { headers: authHeaders() });
+      const data = await res.json();
+      const box = document.getElementById('groupsList');
+      if (!data.groups.length) { box.textContent = 'Nenhum grupo ainda.'; return; }
+      box.innerHTML = data.groups.map(g => `
+        <div style="margin-bottom:12px;padding:10px;background:var(--bg-input);border-radius:8px">
+          <strong>${escapeHtml(g.name)}</strong>
+          <span class="muted"> · ${g.members.length}/${g.capacity}${g.isPrivate ? ' · privado' : ''}</span>
+          <div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:6px">
+            ${(g.channels||[]).map(c =>
+              `<button class="btn btn-ghost btn-sm" onclick="openChannel('${c.id}','${escapeHtml(c.name)}')">#${escapeHtml(c.name)}</button>`
+            ).join('')}
+            <button class="btn btn-primary btn-sm" onclick="joinG('${g.id}')">Entrar no grupo</button>
+            <button class="btn btn-ghost btn-sm" onclick="addCh('${g.id}')">+ canal</button>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    async function joinG(id) {
+      const res = await fetch('/api/groups/' + id + '/join', { method: 'POST', headers: authHeaders() });
+      const data = await res.json();
+      if (!res.ok) return alert(data.error);
+      loadGroups();
+    }
+
+    async function addCh(gid) {
+      const name = prompt('Nome do canal:');
+      if (!name) return;
+      const res = await fetch('/api/groups/' + gid + '/channels', {
+        method: 'POST', headers: authHeaders(), body: JSON.stringify({ name })
+      });
+      const data = await res.json();
+      if (!res.ok) return alert(data.error);
+      loadGroups();
+    }
+
+    async function openChannel(id, name) {
+      currentChannel = id;
+      document.getElementById('chatCard').classList.remove('hidden');
+      document.getElementById('chName').textContent = '#' + name;
+      socket.emit('subscribe-channel', { channelId: id });
+      const res = await fetch('/api/channels/' + id + '/messages', { headers: authHeaders() });
+      const data = await res.json();
+      const box = document.getElementById('chMessages');
+      box.innerHTML = '';
+      (data.messages || []).forEach(onChannelMsg);
+    }
+
+    function onChannelMsg(msg) {
+      if (msg.channelId && currentChannel && msg.channelId !== currentChannel) return;
+      const box = document.getElementById('chMessages');
+      const div = document.createElement('div');
+      div.className = 'chat-msg';
+      div.id = 'msg-' + msg.id;
+      let text = escapeHtml(msg.text);
+      if (msg.mentions && msg.mentions.includes(user.username)) {
+        text = text.replace(/@\w+/g, m => `<span class="mention-highlight">${m}</span>`);
+        if (Notification.permission === 'granted') {
+          new Notification('Familia deCali', { body: msg.name + ': ' + msg.text });
+        }
+      }
+      div.innerHTML = `<strong>${escapeHtml(msg.name)}</strong>
+        <span class="time">${new Date(msg.createdAt).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}</span>
+        <div>${text}</div>
+        <button class="btn btn-ghost btn-sm" style="margin-top:4px" onclick="delMsg('${msg.id}')">Apagar</button>`;
+      box.appendChild(div);
+      box.scrollTop = box.scrollHeight;
+    }
+
+    async function delMsg(id) {
+      const res = await fetch('/api/messages/' + id, { method: 'DELETE', headers: authHeaders() });
+      if (!res.ok) {
+        const d = await res.json();
+        alert(d.error);
+      }
+    }
+
+    document.getElementById('chForm').onsubmit = async (e) => {
+      e.preventDefault();
+      if (!currentChannel) return;
+      const input = document.getElementById('chInput');
+      const text = input.value.trim();
+      if (!text) return;
+      await fetch('/api/channels/' + currentChannel + '/messages', {
+        method: 'POST', headers: authHeaders(), body: JSON.stringify({ text })
+      });
+      input.value = '';
+      socket.emit('typing', { channelId: currentChannel, typing: false });
+    };
+
+    document.getElementById('chInput').addEventListener('input', () => {
+      if (!currentChannel) return;
+      socket.emit('typing', { channelId: currentChannel, typing: true });
+      clearTimeout(typingTimers.t);
+      typingTimers.t = setTimeout(() => {
+        socket.emit('typing', { channelId: currentChannel, typing: false });
+      }, 1200);
+    });
+
+    if (Notification.permission === 'default') {
+      Notification.requestPermission().catch(() => {});
+    }
+
+    function escapeHtml(s) {
+      return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+  </script>
+</body>
+</html>

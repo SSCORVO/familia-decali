@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Criar conta · Familia deCali</title>
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body class="landing">
+  <div class="landing-wrap">
+    <div class="brand">
+      <div class="brand-icon">🏠</div>
+      <h1>Criar sua conta</h1>
+      <p id="inviteInfo">Validando convite...</p>
+    </div>
+    <div class="card">
+      <div id="err" class="error-box"></div>
+      <div class="form-group">
+        <label>Nome de exibição</label>
+        <input type="text" id="displayName" maxlength="32" />
+      </div>
+      <div class="form-group">
+        <label>Usuário (login)</label>
+        <input type="text" id="username" maxlength="24" autocomplete="username" placeholder="letras, números, _" />
+      </div>
+      <div class="form-group">
+        <label>Senha</label>
+        <input type="password" id="password" maxlength="64" autocomplete="new-password" />
+      </div>
+      <div class="form-group">
+        <label>Confirmar senha</label>
+        <input type="password" id="password2" maxlength="64" autocomplete="new-password" />
+      </div>
+      <button class="btn btn-accent" onclick="register()">Criar conta e entrar</button>
+      <button class="btn btn-ghost" onclick="location.href='/'">Voltar</button>
+    </div>
+  </div>
+  <script src="/js/auth.js"></script>
+  <script>
+    const params = new URLSearchParams(location.search);
+    const code = (params.get('code') || '').toUpperCase();
+    if (!code) location.href = '/';
+
+    (async () => {
+      try {
+        const res = await fetch('/api/invites/check/' + encodeURIComponent(code));
+        const data = await res.json();
+        if (!res.ok || !data.valid) {
+          document.getElementById('inviteInfo').textContent = 'Convite inválido';
+          return;
+        }
+        document.getElementById('inviteInfo').textContent =
+          `Convite válido · cargo: ${ROLE_LABELS[data.role] || data.role}` +
+          (data.targetName ? ` · para: ${data.targetName}` : '');
+        if (data.targetName) document.getElementById('displayName').value = data.targetName;
+      } catch {
+        document.getElementById('inviteInfo').textContent = 'Erro ao validar';
+      }
+    })();
+
+    function showErr(m) {
+      const e = document.getElementById('err');
+      e.textContent = m;
+      e.classList.add('show');
+    }
+
+    async function register() {
+      const displayName = document.getElementById('displayName').value.trim();
+      const username = document.getElementById('username').value.trim();
+      const password = document.getElementById('password').value;
+      const password2 = document.getElementById('password2').value;
+      if (password !== password2) return showErr('As senhas não coincidem');
+      try {
+        const res = await fetch('/api/invites/redeem', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code, username, password, displayName })
+        });
+        const data = await res.json();
+        if (!res.ok) return showErr(data.error || 'Falha ao criar conta');
+        setSession(data.token, data.user);
+        location.href = '/home.html';
+      } catch {
+        showErr('Erro de conexão');
+      }
+    }
+  </script>
+</body>
+</html>

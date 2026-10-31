@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Convites · Familia deCali</title>
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <nav class="nav-side">
+      <div class="nav-brand">🏠 Familia deCali</div>
+      <a class="nav-link" href="/home.html">Início</a>
+      <a class="nav-link" href="/account.html">Minha conta</a>
+      <a class="nav-link active" href="/invites.html">Convites</a>
+      <div class="nav-footer">
+        <div id="navName">—</div>
+        <div class="role-badge" id="navRole">—</div>
+        <button class="btn btn-ghost btn-sm" style="margin-top:10px;width:100%" onclick="logout()">Sair</button>
+      </div>
+    </nav>
+    <main class="content">
+      <h1>Convites</h1>
+      <p class="lead">Crie códigos com nome, cargo, validade e limite de usos. Acompanhe quem usou e revogue quando quiser.</p>
+
+      <div class="card" style="margin-bottom:20px">
+        <h2>Novo convite</h2>
+        <div class="grid-2">
+          <div class="form-group">
+            <label>Nome do destinatário (opcional)</label>
+            <input type="text" id="targetName" maxlength="40" placeholder="Ex: João" />
+          </div>
+          <div class="form-group">
+            <label>Cargo inicial</label>
+            <select id="role">
+              <option value="member">Membro</option>
+              <option value="guest">Convidado</option>
+              <option value="moderator">Moderador</option>
+              <option value="admin">Administrador</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Quantidade de usos</label>
+            <input type="number" id="maxUses" min="1" max="50" value="1" />
+          </div>
+          <div class="form-group">
+            <label>Validade (horas)</label>
+            <input type="number" id="expiresInHours" min="1" max="720" value="72" />
+          </div>
+        </div>
+        <button class="btn btn-accent btn-sm" onclick="createInvite()">Gerar convite</button>
+        <p id="newCode" class="muted" style="margin-top:10px"></p>
+      </div>
+
+      <div class="card">
+        <h2>Lista de convites</h2>
+        <div style="overflow-x:auto">
+          <table class="table" id="inviteTable">
+            <thead>
+              <tr>
+                <th>Código</th>
+                <th>Destinatário</th>
+                <th>Cargo</th>
+                <th>Usos</th>
+                <th>Status</th>
+                <th>Quem usou</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+  </div>
+  <script src="/js/auth.js"></script>
+  <script>
+    (async () => {
+      const user = await requireAuth();
+      if (!user) return;
+      if (user.role !== 'owner' && user.role !== 'admin') {
+        alert('Sem permissão');
+        location.href = '/home.html';
+        return;
+      }
+      document.getElementById('navName').textContent = user.displayName;
+      document.getElementById('navRole').textContent = ROLE_LABELS[user.role] || user.role;
+      loadInvites();
+    })();
+
+    async function loadInvites() {
+      const res = await fetch('/api/invites', { headers: authHeaders() });
+      const data = await res.json();
+      const tbody = document.querySelector('#inviteTable tbody');
+      tbody.innerHTML = '';
+      (data.invites || []).forEach(inv => {
+        const usedBy = (inv.uses || []).map(u => u.displayName || u.username).join(', ') || '—';
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td><code>${inv.code}</code></td>
+          <td>${inv.targetName || '—'}</td>
+          <td><span class="badge badge-role">${ROLE_LABELS[inv.role] || inv.role}</span></td>
+          <td>${inv.usesCount}/${inv.maxUses}</td>
+          <td>${inv.valid ? '<span class="badge badge-ok">Ativo</span>' : '<span class="badge badge-off">Inativo</span>'}</td>
+          <td style="max-width:160px;font-size:0.8rem">${usedBy}</td>
+          <td>${inv.valid ? `<button class="btn btn-danger btn-sm" onclick="revoke('${inv.id}')">Revogar</button>` : ''}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    async function createInvite() {
+      const body = {
+        targetName: document.getElementById('targetName').value.trim(),
+        role: document.getElementById('role').value,
+        maxUses: document.getElementById('maxUses').value,
+        expiresInHours: document.getElementById('expiresInHours').value
+      };
+      const res = await fetch('/api/invites', {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify(body)
+      });
+      const data = await res.json();
+      if (!res.ok) return alert(data.error || 'Erro');
+      document.getElementById('newCode').innerHTML =
+        `Código gerado: <strong style="font-size:1.2rem;letter-spacing:2px">${data.invite.code}</strong> — copie e envie.`;
+      loadInvites();
+    }
+
+    async function revoke(id) {
+      if (!confirm('Revogar este convite?')) return;
+      const res = await fetch('/api/invites/' + id + '/revoke', {
+        method: 'POST',
+        headers: authHeaders()
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        return alert(data.error || 'Erro');
+      }
+      loadInvites();
+    }
+  </script>
+</body>
+</html>

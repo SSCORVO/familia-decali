@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Familia deCali</title>
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body class="landing">
+  <div class="landing-wrap">
+    <div class="brand">
+      <div class="brand-icon">🏠</div>
+      <h1>Familia deCali</h1>
+      <p>Entrada por convite · Login · Cargos</p>
+    </div>
+
+    <div class="card">
+      <div class="tabs">
+        <button class="tab active" data-tab="login" onclick="switchTab('login')">Entrar</button>
+        <button class="tab" data-tab="invite" onclick="switchTab('invite')">Tenho convite</button>
+      </div>
+
+      <div id="err" class="error-box"></div>
+
+      <div id="panel-login">
+        <div class="form-group">
+          <label>Usuário</label>
+          <input type="text" id="loginUser" autocomplete="username" />
+        </div>
+        <div class="form-group">
+          <label>Senha</label>
+          <input type="password" id="loginPass" autocomplete="current-password" />
+        </div>
+        <button class="btn btn-primary" onclick="doLogin()">Entrar</button>
+      </div>
+
+      <div id="panel-invite" class="hidden">
+        <p class="muted">Digite o código que o administrador enviou. Você vai criar seu usuário e senha.</p>
+        <div class="form-group">
+          <label>Código do convite</label>
+          <input type="text" id="inviteCode" maxlength="12" style="text-transform:uppercase" placeholder="Ex: AB12CD34" />
+        </div>
+        <button class="btn btn-accent" onclick="checkInvite()">Continuar</button>
+      </div>
+    </div>
+
+    <p class="muted" style="text-align:center;font-size:0.75rem">
+      Dono inicial: usuário <strong>dono</strong> · senha <strong>decali2024</strong>
+    </p>
+  </div>
+
+  <script src="/js/auth.js"></script>
+  <script>
+    if (getToken()) location.href = '/home.html';
+
+    function switchTab(t) {
+      document.querySelectorAll('.tab').forEach(el => el.classList.toggle('active', el.dataset.tab === t));
+      document.getElementById('panel-login').classList.toggle('hidden', t !== 'login');
+      document.getElementById('panel-invite').classList.toggle('hidden', t !== 'invite');
+      hideErr();
+    }
+
+    function showErr(m) {
+      const e = document.getElementById('err');
+      e.textContent = m;
+      e.classList.add('show');
+    }
+    function hideErr() {
+      document.getElementById('err').classList.remove('show');
+    }
+
+    async function doLogin() {
+      hideErr();
+      const username = document.getElementById('loginUser').value.trim();
+      const password = document.getElementById('loginPass').value;
+      try {
+        const res = await fetch('/api/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password })
+        });
+        const data = await res.json();
+        if (!res.ok) return showErr(data.error || 'Falha no login');
+        setSession(data.token, data.user);
+        location.href = '/home.html';
+      } catch {
+        showErr('Erro de conexão');
+      }
+    }
+
+    async function checkInvite() {
+      hideErr();
+      const code = document.getElementById('inviteCode').value.trim().toUpperCase();
+      if (!code) return showErr('Digite o código');
+      try {
+        const res = await fetch('/api/invites/check/' + encodeURIComponent(code));
+        const data = await res.json();
+        if (!res.ok) return showErr(data.error || 'Convite inválido');
+        if (!data.valid) return showErr('Convite expirado, esgotado ou revogado');
+        location.href = '/register.html?code=' + encodeURIComponent(code);
+      } catch {
+        showErr('Erro de conexão');
+      }
+    }
+
+    document.getElementById('loginPass').addEventListener('keydown', e => {
+      if (e.key === 'Enter') doLogin();
+    });
+  </script>
+</body>
+</html>
